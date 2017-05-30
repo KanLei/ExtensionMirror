@@ -5,7 +5,7 @@ import Cocoa
 
 extension Mirror {
     
-    static func headerPointerOfClass(obj: AnyObject) -> UnsafeMutablePointer<Int8> {
+    static func pointerOfClass(obj: AnyObject) -> UnsafeMutablePointer<Int8> {
         let opaquePointer = Unmanaged.passUnretained(obj).toOpaque()
         let mutableTypedPointer = opaquePointer.bindMemory(to: Int8.self, capacity: MemoryLayout.stride(ofValue: obj))
         return UnsafeMutablePointer<Int8>(mutableTypedPointer)
@@ -23,6 +23,8 @@ extension Mirror {
             return MemoryLayout<Float>.alignment
         case is Double:
             return MemoryLayout<Double>.alignment
+        case is Bool:
+            return MemoryLayout<Bool>.alignment
         case is String:
             return MemoryLayout<String>.alignment
         default:
@@ -42,6 +44,8 @@ extension Mirror {
             return MemoryLayout<Float>.size
         case is Double:
             return MemoryLayout<Double>.size
+        case is Bool:
+            return MemoryLayout<Bool>.size
         case is String:
             return MemoryLayout<String>.size
         default:
@@ -49,7 +53,7 @@ extension Mirror {
         }
     }
     
-    static func process(obj: Any, value: String, for key: String, pointer: UnsafeMutableRawPointer) {
+    static func set(obj: Any, value: String, for key: String, pointer: UnsafeMutableRawPointer) {
         var pointer = pointer
         let mirror = Mirror(reflecting: obj)
         for child in mirror.children {
@@ -81,6 +85,9 @@ extension Mirror {
                 case is Double:
                     let doublePtr = pointer.assumingMemoryBound(to: Double.self)
                     doublePtr.pointee = Double(value)!
+                case is Bool:
+                    let boolPtr = pointer.assumingMemoryBound(to: Bool.self)
+                    boolPtr.pointee = Bool(value)!
                 case is String:
                     let stringPtr = pointer.assumingMemoryBound(to: String.self)
                     stringPtr.pointee = String(value)!
@@ -96,10 +103,20 @@ extension Mirror {
         }
     }
     
-    static func set(_ obj: AnyObject, value: String, for key: String) {
-        var pointer = UnsafeMutableRawPointer(headerPointerOfClass(obj: obj))
-        pointer = pointer.advanced(by: 16)  // type + reference count
-        process(obj: obj, value: value, for: key, pointer: pointer)
+    static func set(_ obj: Any, ptr: UnsafeMutableRawPointer, value: String, for key: String) {
+        let style = Mirror(reflecting: obj).displayStyle!
+        switch style {
+        case .class:
+            var pointer = pointerOfClass(obj: obj as AnyObject)
+            var ptr = UnsafeMutableRawPointer(pointer).advanced(by: 16)  // type + reference count
+            set(obj: obj, value: value, for: key, pointer: ptr)
+            
+            
+        case .struct:
+            set(obj: obj, value: value, for: key, pointer: ptr)
+        default:
+            print("type undefined")
+        }
     }
 }
 
@@ -107,12 +124,14 @@ class Person {
     var name: String = "left"
     var age: Int8 = 18
     var height: Float = 180
+    var isAdult: Bool = true
     var weight: Double = 120.0
 }
 
 
 var person = Person()
-print(person.height)
-Mirror.set(person, value: "0", for: "height")
-print(person.height)
+print(person.weight)
+Mirror.set(person, ptr: &person, value: "30", for: "weight")
+print(person.weight)
+
 
